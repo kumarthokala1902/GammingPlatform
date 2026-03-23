@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile information including username and location.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID from Firebase Auth." },
+        "username": { "type": "string", "description": "The user's chosen display name." },
+        "email": { "type": "string", "description": "The user's email address." },
+        "place": { "type": "string", "description": "The user's location/place." },
+        "avatar": { "type": "string", "description": "URL to the user's avatar image." },
+        "totalPlaytime": { "type": "number", "description": "Total playtime in seconds." },
+        "achievements": { "type": "array", "items": { "type": "string" }, "description": "List of achievement IDs." },
+        "streak": { "type": "number", "description": "Current daily login streak." },
+        "lastPlayedAt": { "type": "string", "format": "date-time", "description": "Last time the user played a game." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the profile was created." }
+      },
+      "required": ["uid", "username", "email", "place"]
+    },
+    "Score": {
+      "title": "Game Score",
+      "description": "Stores high scores for users in different games.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who achieved the score." },
+        "username": { "type": "string", "description": "The username at the time of the score." },
+        "gameId": { "type": "string", "description": "The ID of the game (e.g., COLOR_DASH)." },
+        "score": { "type": "number", "description": "The score achieved." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the score was achieved." }
+      },
+      "required": ["userId", "username", "gameId", "score", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles."
+    },
+    "/scores/{scoreId}": {
+      "schema": "Score",
+      "description": "Collection of all-time high scores."
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "projectId": "claude-ls",
+  "appId": "1:92036333154:web:ee677c3922ebee36b61b3b",
+  "apiKey": "AIzaSyB8vxtMDwh5_BX_wQvkHW_hKcU5lGTRYlI",
+  "authDomain": "claude-ls.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "claude-ls.firebasestorage.app",
+  "messagingSenderId": "92036333154",
+  "measurementId": "G-FXHSYGEXH1",
+  "databaseURL": "https://claude-ls-default-rtdb.firebaseio.com"
+}
