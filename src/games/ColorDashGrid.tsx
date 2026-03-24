@@ -20,7 +20,7 @@ const COLORS = [
   '#55FFFF', // Cyan
 ];
 
-type GameStatus = 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER';
+type GameStatus = 'START' | 'TUTORIAL' | 'PLAYING' | 'PAUSED' | 'GAMEOVER';
 
 interface Tile {
   id: number;
@@ -75,6 +75,25 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
   const [isDaily, setIsDaily] = useState(false);
   const [gridSize, setGridSize] = useState(INITIAL_GRID_SIZE);
   const [combo, setCombo] = useState(0);
+  const [tutorialStep, setTutorialStep] = useState(0);
+
+  const tutorialSteps = [
+    {
+      title: "Movement",
+      description: "Use Arrow Keys or Swipe to move your block left and right.",
+      icon: <ChevronRight className="w-8 h-8 text-blue-400" />
+    },
+    {
+      title: "Matching",
+      description: "Match your block's color with the incoming tiles to score points.",
+      icon: <Zap className="w-8 h-8 text-yellow-400" />
+    },
+    {
+      title: "Avoidance",
+      description: "Avoid tiles with different colors! The game speeds up as you score.",
+      icon: <X className="w-8 h-8 text-red-400" />
+    }
+  ];
 
   const gameState = useRef({
     playerX: Math.floor(INITIAL_GRID_SIZE / 2),
@@ -127,6 +146,11 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
     setGridSize(INITIAL_GRID_SIZE);
     setCombo(0);
     setStatus('PLAYING');
+  };
+
+  const startTutorial = () => {
+    setTutorialStep(0);
+    setStatus('TUTORIAL');
   };
 
   const gameOver = useCallback(async () => {
@@ -579,6 +603,12 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
                     Start Game <ChevronRight size={18} />
                   </button>
                   <button
+                    onClick={startTutorial}
+                    className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 border border-white/10"
+                  >
+                    <Info size={18} /> Tutorial
+                  </button>
+                  <button
                     onClick={() => startGame(true)}
                     className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 border border-white/10"
                   >
@@ -589,7 +619,59 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
             </motion.div>
           )}
 
-          {status === 'PAUSED' && (
+          {status === 'TUTORIAL' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+          >
+            <div className="bg-zinc-900 border border-white/10 p-8 rounded-3xl max-w-md w-full text-center shadow-2xl">
+              <div className="flex justify-center mb-6">
+                <div className="p-4 bg-white/5 rounded-2xl">
+                  {tutorialSteps[tutorialStep].icon}
+                </div>
+              </div>
+              <h2 className="text-3xl font-bold mb-4">{tutorialSteps[tutorialStep].title}</h2>
+              <p className="text-zinc-400 text-lg mb-8 leading-relaxed">
+                {tutorialSteps[tutorialStep].description}
+              </p>
+              <div className="flex gap-4">
+                {tutorialStep > 0 && (
+                  <button
+                    onClick={() => setTutorialStep(s => s - 1)}
+                    className="flex-1 py-4 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition-colors"
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (tutorialStep < tutorialSteps.length - 1) {
+                      setTutorialStep(s => s + 1);
+                    } else {
+                      startGame(false);
+                    }
+                  }}
+                  className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-colors"
+                >
+                  {tutorialStep < tutorialSteps.length - 1 ? "Next" : "Got it!"}
+                </button>
+              </div>
+              <div className="flex justify-center gap-2 mt-8">
+                {tutorialSteps.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      i === tutorialStep ? "w-8 bg-blue-500" : "bg-white/20"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {status === 'PAUSED' && (
             <motion.div
               initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
               animate={{ opacity: 1, backdropFilter: 'blur(12px)' }}

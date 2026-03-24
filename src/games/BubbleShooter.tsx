@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Play, RotateCcw, ChevronRight, Pause, X, ArrowLeft, Target } from 'lucide-react';
+import { Trophy, Play, RotateCcw, ChevronRight, Pause, X, ArrowLeft, Target, Zap, Info } from 'lucide-react';
 import { db, collection, setDoc, doc, serverTimestamp, OperationType, handleFirestoreError } from '../firebase';
 
 const ROWS = 12;
@@ -51,7 +51,7 @@ interface ComboPopup {
   color: string;
 }
 
-type GameStatus = 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'WIN';
+type GameStatus = 'START' | 'TUTORIAL' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'WIN';
 
 interface BubbleShooterProps {
   onBack: () => void;
@@ -65,6 +65,25 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [shotsLeft, setShotsLeft] = useState(25);
+  const [tutorialStep, setTutorialStep] = useState(0);
+
+  const tutorialSteps = [
+    {
+      title: "Aiming",
+      description: "Move your mouse or touch the screen to aim your bubble launcher.",
+      icon: <Target className="w-8 h-8 text-blue-400" />
+    },
+    {
+      title: "Shooting",
+      description: "Click or Tap to shoot. Match 3 or more bubbles of the same color to pop them.",
+      icon: <Zap className="w-8 h-8 text-yellow-400" />
+    },
+    {
+      title: "Objective",
+      description: "Clear all bubbles before you run out of shots or they reach the bottom!",
+      icon: <Trophy className="w-8 h-8 text-orange-400" />
+    }
+  ];
   
   const gameState = useRef({
     grid: [] as (Bubble | null)[][],
@@ -129,6 +148,11 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
     setShotsLeft(25);
     setScore(0);
     setStatus('PLAYING');
+  };
+
+  const startTutorial = () => {
+    setTutorialStep(0);
+    setStatus('TUTORIAL');
   };
 
   const saveScore = useCallback(async (currentScore: number) => {
@@ -817,13 +841,73 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
               </div>
               <h2 className="text-3xl font-bold mb-2 tracking-tight">Bubble Blast</h2>
               <p className="text-white/60 mb-8 max-w-[280px] text-sm">Match 3 or more bubbles of the same color to pop them! You have 25 shots to clear the board.</p>
-              <button onClick={startGame} className="w-full max-w-[240px] py-4 bg-white text-black font-bold rounded-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-xl">
-                Start Game <ChevronRight size={18} />
-              </button>
+              <div className="flex flex-col gap-3 w-full max-w-[240px] mx-auto">
+                <button onClick={startGame} className="w-full py-4 bg-white text-black font-bold rounded-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-xl">
+                  Start Game <ChevronRight size={18} />
+                </button>
+                <button
+                  onClick={startTutorial}
+                  className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 border border-white/10"
+                >
+                  <Info size={18} /> Tutorial
+                </button>
+              </div>
             </motion.div>
           )}
 
-          {status === 'WIN' && (
+          {status === 'TUTORIAL' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+          >
+            <div className="bg-zinc-900 border border-white/10 p-8 rounded-3xl max-w-md w-full text-center shadow-2xl">
+              <div className="flex justify-center mb-6">
+                <div className="p-4 bg-white/5 rounded-2xl">
+                  {tutorialSteps[tutorialStep].icon}
+                </div>
+              </div>
+              <h2 className="text-3xl font-bold mb-4">{tutorialSteps[tutorialStep].title}</h2>
+              <p className="text-zinc-400 text-lg mb-8 leading-relaxed">
+                {tutorialSteps[tutorialStep].description}
+              </p>
+              <div className="flex gap-4">
+                {tutorialStep > 0 && (
+                  <button
+                    onClick={() => setTutorialStep(s => s - 1)}
+                    className="flex-1 py-4 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition-colors"
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (tutorialStep < tutorialSteps.length - 1) {
+                      setTutorialStep(s => s + 1);
+                    } else {
+                      startGame();
+                    }
+                  }}
+                  className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-colors"
+                >
+                  {tutorialStep < tutorialSteps.length - 1 ? "Next" : "Got it!"}
+                </button>
+              </div>
+              <div className="flex justify-center gap-2 mt-8">
+                {tutorialSteps.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      i === tutorialStep ? "w-8 bg-blue-500" : "bg-white/20"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {status === 'WIN' && (
             <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md rounded-2xl p-4 sm:p-8 text-center">
               <div className="w-16 h-16 sm:w-20 sm:h-20 bg-yellow-500 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 mx-auto shadow-lg shadow-yellow-500/50">
                 <Trophy size={32} className="text-white sm:hidden" />

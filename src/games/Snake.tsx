@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Play, RotateCcw, ChevronRight, Pause, X, ArrowLeft, Apple } from 'lucide-react';
+import { Trophy, Play, RotateCcw, ChevronRight, Pause, X, ArrowLeft, Apple, Info } from 'lucide-react';
 import { db, collection, setDoc, doc, serverTimestamp, OperationType, handleFirestoreError } from '../firebase';
 
 const GRID_SIZE = 20;
@@ -13,7 +13,7 @@ const INITIAL_SNAKE = [{ x: 10, y: 10 }, { x: 10, y: 11 }, { x: 10, y: 12 }];
 const INITIAL_DIRECTION = { x: 0, y: -1 };
 const INITIAL_SPEED = 150;
 
-type GameStatus = 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER';
+type GameStatus = 'START' | 'TUTORIAL' | 'PLAYING' | 'PAUSED' | 'GAMEOVER';
 
 interface SnakeProps {
   onBack: () => void;
@@ -44,6 +44,25 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
   const [status, setStatus] = useState<GameStatus>('START');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
+  const [tutorialStep, setTutorialStep] = useState(0);
+
+  const tutorialSteps = [
+    {
+      title: "Movement",
+      description: "Use Arrow Keys or Swipe to change the snake's direction.",
+      icon: <ChevronRight className="w-8 h-8 text-blue-400" />
+    },
+    {
+      title: "Eating",
+      description: "Eat the glowing apples to grow longer and score points.",
+      icon: <Apple className="w-8 h-8 text-red-400" />
+    },
+    {
+      title: "Survival",
+      description: "Don't hit the walls or your own tail, or it's game over!",
+      icon: <X className="w-8 h-8 text-red-500" />
+    }
+  ];
   
   const gameState = useRef({
     snake: [...INITIAL_SNAKE],
@@ -102,6 +121,11 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
     setScore(0);
     spawnFood();
     setStatus('PLAYING');
+  };
+
+  const startTutorial = () => {
+    setTutorialStep(0);
+    setStatus('TUTORIAL');
   };
 
   const gameOver = useCallback(async () => {
@@ -456,13 +480,73 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
               </div>
               <h2 className="text-3xl font-bold mb-2 tracking-tight">Neon Snake</h2>
               <p className="text-white/60 mb-8 max-w-[280px] text-sm">Eat the apples, grow long, and don't hit the walls!</p>
-              <button onClick={startGame} className="w-full max-w-[240px] py-4 bg-white text-black font-bold rounded-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-xl">
-                Start Game <ChevronRight size={18} />
-              </button>
+              <div className="flex flex-col gap-3 w-full max-w-[240px] mx-auto">
+                <button onClick={startGame} className="w-full py-4 bg-white text-black font-bold rounded-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-xl">
+                  Start Game <ChevronRight size={18} />
+                </button>
+                <button
+                  onClick={startTutorial}
+                  className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 border border-white/10"
+                >
+                  <Info size={18} /> Tutorial
+                </button>
+              </div>
             </motion.div>
           )}
 
-          {status === 'PAUSED' && (
+          {status === 'TUTORIAL' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+          >
+            <div className="bg-zinc-900 border border-white/10 p-8 rounded-3xl max-w-md w-full text-center shadow-2xl">
+              <div className="flex justify-center mb-6">
+                <div className="p-4 bg-white/5 rounded-2xl">
+                  {tutorialSteps[tutorialStep].icon}
+                </div>
+              </div>
+              <h2 className="text-3xl font-bold mb-4">{tutorialSteps[tutorialStep].title}</h2>
+              <p className="text-zinc-400 text-lg mb-8 leading-relaxed">
+                {tutorialSteps[tutorialStep].description}
+              </p>
+              <div className="flex gap-4">
+                {tutorialStep > 0 && (
+                  <button
+                    onClick={() => setTutorialStep(s => s - 1)}
+                    className="flex-1 py-4 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition-colors"
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (tutorialStep < tutorialSteps.length - 1) {
+                      setTutorialStep(s => s + 1);
+                    } else {
+                      startGame();
+                    }
+                  }}
+                  className="flex-1 py-4 bg-green-600 hover:bg-green-500 rounded-xl font-bold shadow-lg shadow-green-500/20 transition-colors"
+                >
+                  {tutorialStep < tutorialSteps.length - 1 ? "Next" : "Got it!"}
+                </button>
+              </div>
+              <div className="flex justify-center gap-2 mt-8">
+                {tutorialSteps.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      i === tutorialStep ? "w-8 bg-green-500" : "bg-white/20"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {status === 'PAUSED' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 rounded-2xl p-8 text-center backdrop-blur-md">
               <h2 className="text-3xl font-bold mb-8 tracking-tight">Paused</h2>
               <div className="flex flex-col gap-3 w-full max-w-[200px]">
