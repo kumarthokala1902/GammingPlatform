@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Play, RotateCcw, Calendar, Zap, ChevronRight, Info, Pause, X, ArrowLeft } from 'lucide-react';
 import { db, collection, setDoc, doc, serverTimestamp, OperationType, handleFirestoreError } from '../firebase';
+import { soundService } from '../lib/soundService';
 
 // --- Constants & Types ---
 const INITIAL_GRID_SIZE = 5;
@@ -44,6 +45,14 @@ interface ComboPopup {
   x: number;
   y: number;
   text: string;
+  life: number;
+  color: string;
+}
+
+interface ScoreRing {
+  x: number;
+  y: number;
+  radius: number;
   life: number;
   color: string;
 }
@@ -111,8 +120,10 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
     comboFlash: 0,
     shake: 0,
     comboPopups: [] as ComboPopup[],
+    scoreRings: [] as ScoreRing[],
     popupId: 0,
     startTime: 0,
+    playerPulse: 0,
   });
 
   useEffect(() => {
@@ -121,6 +132,7 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
   }, []);
 
   const startGame = (daily = false) => {
+    soundService.play('click');
     setIsDaily(daily);
     const seed = daily ? getDailySeed() : Math.random() * 1000000;
     gameState.current = {
@@ -139,8 +151,10 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
       comboFlash: 0,
       shake: 0,
       comboPopups: [],
+      scoreRings: [],
       popupId: 0,
       startTime: performance.now(),
+      playerPulse: 0,
     };
     setScore(0);
     setGridSize(INITIAL_GRID_SIZE);
@@ -154,6 +168,7 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
   };
 
   const gameOver = useCallback(async () => {
+    soundService.play('gameover');
     setStatus('GAMEOVER');
     const currentScore = gameState.current.score;
     const playtime = Math.floor((performance.now() - gameState.current.startTime) / 1000);
@@ -184,6 +199,7 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
   }, [highScore, user, onGameEnd]);
 
   const togglePause = useCallback(() => {
+    soundService.play('click');
     if (status === 'PLAYING') {
       setStatus('PAUSED');
     } else if (status === 'PAUSED') {
@@ -196,8 +212,10 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
     const handleKeyDown = (e: KeyboardEvent) => {
       if (status !== 'PLAYING') return;
       if (e.key === 'ArrowLeft') {
+        soundService.play('move');
         gameState.current.playerX = Math.max(0, gameState.current.playerX - 1);
       } else if (e.key === 'ArrowRight') {
+        soundService.play('move');
         gameState.current.playerX = Math.min(gameState.current.gridSize - 1, gameState.current.playerX + 1);
       }
     };
@@ -305,20 +323,31 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
         if (tile.y + cellSize > playerY + 10 && tile.y < playerY + cellSize - 10) {
           if (tile.x === gameState.current.playerX) {
             if (tile.color === gameState.current.playerColor) {
+              soundService.play('score');
               gameState.current.score += 1;
               setScore(gameState.current.score);
               setCombo(c => c + 1);
+              gameState.current.playerPulse = 1.0;
               
-              for (let p = 0; p < 10; p++) {
+              gameState.current.scoreRings.push({
+                x: tile.x * cellSize + cellSize / 2,
+                y: playerY + cellSize / 2,
+                radius: 10,
+                life: 1.0,
+                color: tile.color,
+              });
+
+              for (let p = 0; p < 25; p++) {
                 gameState.current.particles.push({
                   x: tile.x * cellSize + cellSize / 2,
                   y: playerY + cellSize / 2,
-                  vx: (gameState.current.rng() - 0.5) * 10,
-                  vy: (gameState.current.rng() - 0.5) * 10,
-                  life: 1,
+                  vx: (gameState.current.rng() - 0.5) * 15,
+                  vy: (gameState.current.rng() - 0.5) * 15,
+                  life: 1.2,
                   color: tile.color,
                 });
               }
+              gameState.current.shake = 8;
               
               if (gameState.current.score % 5 === 0) {
                 gameState.current.comboFlash = 1.0;
@@ -367,6 +396,17 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
         p.y -= 2 * dt;
         p.life -= 0.02 * dt;
         if (p.life <= 0) gameState.current.comboPopups.splice(i, 1);
+      }
+
+      for (let i = gameState.current.scoreRings.length - 1; i >= 0; i--) {
+        const r = gameState.current.scoreRings[i];
+        r.radius += 5 * dt;
+        r.life -= 0.03 * dt;
+        if (r.life <= 0) gameState.current.scoreRings.splice(i, 1);
+      }
+
+      if (gameState.current.playerPulse > 0) {
+        gameState.current.playerPulse -= 0.1 * dt;
       }
 
       if (gameState.current.comboFlash > 0) {
@@ -448,24 +488,33 @@ export default function ColorDashGrid({ onBack, user, onGameEnd }: ColorDashGrid
       const ph = cellSize - 8;
       const pr = 12;
 
+      const pulseScale = 1 + (gameState.current.playerPulse * 0.2);
+      ctx.save();
+      ctx.translate(px + pw / 2, py + ph / 2);
+      ctx.scale(pulseScale, pulseScale);
+      
       ctx.shadowBlur = 25;
       ctx.shadowColor = gameState.current.playerColor;
       ctx.fillStyle = gameState.current.playerColor;
       ctx.beginPath();
-      ctx.moveTo(px + pr, py);
-      ctx.lineTo(px + pw - pr, py);
-      ctx.quadraticCurveTo(px + pw, py, px + pw, py + pr);
-      ctx.lineTo(px + pw, py + ph - pr);
-      ctx.quadraticCurveTo(px + pw, py + ph, px + pw - pr, py + ph);
-      ctx.lineTo(px + pr, py + ph);
-      ctx.quadraticCurveTo(px, py + ph, px, py + ph - pr);
-      ctx.lineTo(px, py + pr);
-      ctx.quadraticCurveTo(px, py, px + pr, py);
-      ctx.closePath();
+      ctx.roundRect(-pw / 2, -ph / 2, pw, ph, pr);
       ctx.fill();
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 3;
       ctx.stroke();
+      ctx.restore();
+
+      // Draw Score Rings
+      gameState.current.scoreRings.forEach(r => {
+        ctx.save();
+        ctx.globalAlpha = r.life;
+        ctx.strokeStyle = r.color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      });
 
       ctx.shadowBlur = 0;
       gameState.current.particles.forEach(p => {

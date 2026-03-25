@@ -5,12 +5,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutGrid, Gamepad2, Trophy, Settings, Search, Bell, User, Zap, Star, Mail, MapPin, Calendar, LogOut, LogIn, Loader2, Sun, Moon, CheckCircle2, AlertCircle } from 'lucide-react';
+import { LayoutGrid, Gamepad2, Trophy, Settings, Search, Bell, User, Zap, Star, Mail, MapPin, Calendar, LogOut, LogIn, Loader2, Sun, Moon, CheckCircle2, AlertCircle, Dice5, Volume2, VolumeX, Apple, Car } from 'lucide-react';
 import ColorDashGrid from './games/ColorDashGrid';
 import Snake from './games/Snake';
 import BubbleShooter from './games/BubbleShooter';
+import SnakesAndLadders from './games/SnakesAndLadders';
+import FruitSmash from './games/FruitSmash';
+import DrDriving from './games/DrDriving';
 import GameCard from './components/GameCard';
 import LandingPage from './components/LandingPage';
+import { soundService } from './lib/soundService';
 import { 
   auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged, 
   createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, updateProfile,
@@ -18,7 +22,7 @@ import {
   serverTimestamp, OperationType, handleFirestoreError, FirebaseUser 
 } from './firebase';
 
-type GameID = 'COLOR_DASH' | 'SNAKE' | 'BUBBLE_SHOOTER' | null;
+type GameID = 'COLOR_DASH' | 'SNAKE' | 'BUBBLE_SHOOTER' | 'SNAKES_AND_LADDERS' | 'FRUIT_SMASH' | 'DR_DRIVING' | null;
 type View = 'GAMES' | 'LEADERBOARD' | 'NOTIFICATIONS' | 'USERS' | 'SETTINGS';
 
 interface UserData {
@@ -66,6 +70,7 @@ export default function App() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [scores, setScores] = useState<ScoreData[]>([]);
   const [theme, setTheme] = useState<'DARK' | 'LIGHT'>('DARK');
+  const [soundEnabled, setSoundEnabled] = useState(soundService.isEnabled());
 
   // Settings States
   const [newUsername, setNewUsername] = useState('');
@@ -243,11 +248,21 @@ export default function App() {
     setTheme(prev => prev === 'DARK' ? 'LIGHT' : 'DARK');
   };
 
+  const toggleSound = () => {
+    const newState = !soundEnabled;
+    soundService.setEnabled(newState);
+    setSoundEnabled(newState);
+    if (newState) {
+      soundService.play('click');
+    }
+  };
+
   useEffect(() => {
     const colorDashScore = parseInt(localStorage.getItem('colorDashHighScore') || '0');
     const snakeScore = parseInt(localStorage.getItem('snakeHighScore') || '0');
     const bubbleShooterScore = parseInt(localStorage.getItem('bubbleShooterHighScore') || '0');
-    setTotalScore(colorDashScore + snakeScore + bubbleShooterScore);
+    const snakesAndLaddersScore = parseInt(localStorage.getItem('snakesAndLaddersHighScore') || '0');
+    setTotalScore(colorDashScore + snakeScore + bubbleShooterScore + snakesAndLaddersScore);
   }, [activeGame]);
 
   const games = [
@@ -273,6 +288,30 @@ export default function App() {
       description: 'Match colors and clear the board in this addictive puzzle.',
       icon: <LayoutGrid size={32} className="text-white" />,
       color: 'from-orange-500 to-red-600',
+      isNew: false,
+    },
+    {
+      id: 'SNAKES_AND_LADDERS' as const,
+      title: 'Mars Expedition',
+      description: 'Race to the finish line in this Mars-themed Snakes & Ladders.',
+      icon: <Dice5 size={32} className="text-white" />,
+      color: 'from-blue-600 to-indigo-600',
+      isNew: false,
+    },
+    {
+      id: 'FRUIT_SMASH' as const,
+      title: 'Fruit Smash',
+      description: 'Smash falling fruits in the zone and avoid the bombs!',
+      icon: <Apple size={32} className="text-white" />,
+      color: 'from-red-500 to-orange-600',
+      isNew: false,
+    },
+    {
+      id: 'DR_DRIVING' as const,
+      title: 'Dr. Driving',
+      description: 'Master the art of precision parking and traffic navigation.',
+      icon: <Car size={32} className="text-white" />,
+      color: 'from-blue-500 to-cyan-600',
       isNew: true,
     },
   ];
@@ -501,6 +540,18 @@ export default function App() {
     return <BubbleShooter onBack={() => setActiveGame(null)} user={profile} onGameEnd={(score, playtime) => handleGameEnd('BUBBLE_SHOOTER', score, playtime)} />;
   }
 
+  if (activeGame === 'SNAKES_AND_LADDERS') {
+    return <SnakesAndLadders onBack={() => setActiveGame(null)} user={profile} onGameEnd={(score, playtime) => handleGameEnd('SNAKES_AND_LADDERS', score, playtime)} />;
+  }
+
+  if (activeGame === 'FRUIT_SMASH') {
+    return <FruitSmash onBack={() => setActiveGame(null)} user={profile} onGameEnd={(score, playtime) => handleGameEnd('FRUIT_SMASH', score, playtime)} />;
+  }
+
+  if (activeGame === 'DR_DRIVING') {
+    return <DrDriving onBack={() => setActiveGame(null)} user={profile} onGameEnd={(score, playtime) => handleGameEnd('DR_DRIVING', score, playtime)} />;
+  }
+
   return (
     <div className={`min-h-screen ${theme === 'DARK' ? 'bg-[#0a0a0c] text-white' : 'bg-[#f5f5f7] text-slate-900'} font-sans selection:bg-indigo-500/30 overflow-x-hidden transition-colors duration-500`}>
       {/* Background Decorative Elements */}
@@ -609,6 +660,20 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
+            <button 
+              onClick={toggleSound}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${theme === 'DARK' ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white/60 hover:text-white' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-900'} border`}
+              title={soundEnabled ? "Mute Sound" : "Unmute Sound"}
+            >
+              {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+            <button 
+              onClick={toggleTheme}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${theme === 'DARK' ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white/60 hover:text-white' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-900'} border`}
+              title={theme === 'DARK' ? "Light Mode" : "Dark Mode"}
+            >
+              {theme === 'DARK' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
             <div className="relative hidden lg:block">
               <Search className={`absolute left-4 top-1/2 -translate-y-1/2 ${theme === 'DARK' ? 'text-white/20' : 'text-slate-300'}`} size={18} />
               <input 
@@ -744,6 +809,18 @@ export default function App() {
                     >
                       Bubble Shooter
                     </button>
+                    <button 
+                      onClick={() => setLeaderboardGameFilter('FRUIT_SMASH')}
+                      className={`px-4 py-2 text-xs font-bold rounded-full transition-all ${leaderboardGameFilter === 'FRUIT_SMASH' ? 'bg-indigo-600 text-white' : (theme === 'DARK' ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-600')}`}
+                    >
+                      Fruit Smash
+                    </button>
+                    <button 
+                      onClick={() => setLeaderboardGameFilter('DR_DRIVING')}
+                      className={`px-4 py-2 text-xs font-bold rounded-full transition-all ${leaderboardGameFilter === 'DR_DRIVING' ? 'bg-indigo-600 text-white' : (theme === 'DARK' ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-600')}`}
+                    >
+                      Dr. Driving
+                    </button>
                   </div>
                 </div>
 
@@ -785,7 +862,7 @@ export default function App() {
                                   <span className={`font-bold truncate ${theme === 'DARK' ? 'text-white' : 'text-slate-900'}`}>{score.username}</span>
                                 </div>
                                 <div className={`text-sm font-medium truncate ${theme === 'DARK' ? 'text-white/40' : 'text-slate-500'}`}>
-                                  {score.gameId === 'COLOR_DASH' ? 'Color Dash Grid' : score.gameId === 'SNAKE' ? 'Neon Snake' : 'Bubble Shooter'}
+                                  {score.gameId === 'COLOR_DASH' ? 'Color Dash Grid' : score.gameId === 'SNAKE' ? 'Neon Snake' : score.gameId === 'BUBBLE_SHOOTER' ? 'Bubble Shooter' : score.gameId === 'FRUIT_SMASH' ? 'Fruit Smash' : score.gameId === 'DR_DRIVING' ? 'Dr. Driving' : 'Mars Expedition'}
                                 </div>
                                 <div className="text-right font-black text-indigo-400">
                                   {score.score.toLocaleString()}

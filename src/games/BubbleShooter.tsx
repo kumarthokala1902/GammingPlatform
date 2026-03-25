@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Play, RotateCcw, ChevronRight, Pause, X, ArrowLeft, Target, Zap, Info } from 'lucide-react';
 import { db, collection, setDoc, doc, serverTimestamp, OperationType, handleFirestoreError } from '../firebase';
+import { soundService } from '../lib/soundService';
 
 const ROWS = 12;
 const COLS = 10;
@@ -40,6 +41,8 @@ interface Particle {
   vy: number;
   life: number;
   color: string;
+  scale?: number;
+  isPop?: boolean;
 }
 
 interface ComboPopup {
@@ -100,6 +103,8 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
     isShooting: false,
     startTime: 0,
     shotsLeft: 25,
+    flash: 0,
+    wobble: 0,
   });
 
   useEffect(() => {
@@ -136,11 +141,14 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
   }, []);
 
   const startGame = () => {
+    soundService.play('click');
     initGrid();
     gameState.current.score = 0;
     gameState.current.particles = [];
     gameState.current.comboPopups = [];
     gameState.current.shake = 0;
+    gameState.current.flash = 0;
+    gameState.current.wobble = 0;
     gameState.current.projectile = null;
     gameState.current.startTime = performance.now();
     gameState.current.lastFrameTime = performance.now();
@@ -183,6 +191,7 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
   }, [highScore, user, onGameEnd]);
 
   const gameOver = useCallback(async () => {
+    soundService.play('gameover');
     setStatus('GAMEOVER');
     await saveScore(gameState.current.score);
   }, [saveScore]);
@@ -278,14 +287,27 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
   const checkAndPop = (row: number, col: number, color: string) => {
     const cluster = findCluster(row, col, color);
     if (cluster.length >= 3) {
+      soundService.play('match');
       cluster.forEach(spot => {
         const b = gameState.current.grid[spot.row][spot.col]!;
-        for (let i = 0; i < 10; i++) {
+        // Add pop effect particle
+        gameState.current.particles.push({
+          x: b.displayX || b.x,
+          y: b.displayY || b.y,
+          vx: 0,
+          vy: 0,
+          life: 1.0,
+          color: b.color,
+          scale: 1.0,
+          isPop: true
+        });
+
+        for (let i = 0; i < 15; i++) {
           gameState.current.particles.push({
             x: b.displayX || b.x,
             y: b.displayY || b.y,
-            vx: (Math.random() - 0.5) * 10,
-            vy: (Math.random() - 0.5) * 10,
+            vx: (Math.random() - 0.5) * 15,
+            vy: (Math.random() - 0.5) * 15,
             life: 1.0,
             color: b.color
           });
@@ -299,6 +321,10 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
       gameState.current.score += points;
       setScore(gameState.current.score);
       
+      if (cluster.length >= 5) {
+        gameState.current.flash = 1.0;
+      }
+      gameState.current.wobble = 1.0;
       gameState.current.shake = 10;
       gameState.current.comboPopups.push({
         id: gameState.current.popupId++,
@@ -484,6 +510,7 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
         gameState.current.score += efficiencyBonus;
         setScore(gameState.current.score);
         setStatus('WIN');
+        soundService.play('score');
         saveScore(gameState.current.score);
         return;
       }
@@ -510,6 +537,7 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
   const shoot = () => {
     if (gameState.current.isShooting || status !== 'PLAYING' || gameState.current.shotsLeft <= 0) return;
     
+    soundService.play('click');
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -589,6 +617,9 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.life -= 0.02 * dt;
+        if (p.isPop) {
+          p.scale = (p.scale || 1.0) + 0.05 * dt;
+        }
         if (p.life <= 0) gameState.current.particles.splice(i, 1);
       }
 
@@ -604,6 +635,14 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
         if (gameState.current.shake < 0.1) gameState.current.shake = 0;
       }
 
+      if (gameState.current.flash > 0) {
+        gameState.current.flash -= 0.05 * dt;
+      }
+
+      if (gameState.current.wobble > 0) {
+        gameState.current.wobble -= 0.05 * dt;
+      }
+
       draw();
       animationId = requestAnimationFrame(update);
     };
@@ -616,8 +655,8 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
       ctx.clearRect(-50, -50, canvas.width + 100, canvas.height + 100);
 
       // Draw Grid Bubbles
-      gameState.current.grid.forEach(row => {
-        row.forEach(b => {
+      gameState.current.grid.forEach((row, r) => {
+        row.forEach((b, c) => {
           if (b) {
             // Smooth sliding animation
             if (b.displayX === undefined) b.displayX = b.x;
@@ -626,8 +665,11 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
             b.displayX += (b.x - b.displayX) * 0.15;
             b.displayY += (b.y - b.displayY) * 0.15;
 
+            const wobbleX = Math.sin(performance.now() / 100 + r + c) * 2 * gameState.current.wobble;
+            const wobbleY = Math.cos(performance.now() / 100 + r + c) * 2 * gameState.current.wobble;
+
             ctx.save();
-            ctx.translate(b.displayX, b.displayY);
+            ctx.translate(b.displayX + wobbleX, b.displayY + wobbleY);
             
             ctx.fillStyle = b.color;
             ctx.shadowBlur = 10;
@@ -645,6 +687,12 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
           }
         });
       });
+
+      // Draw Flash
+      if (gameState.current.flash > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${gameState.current.flash * 0.3})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
 
       // Draw Launcher
       const lx = canvas.width / 2;
@@ -725,8 +773,15 @@ export default function BubbleShooter({ onBack, user, onGameEnd }: BubbleShooter
         ctx.globalAlpha = p.life;
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-        ctx.fill();
+        if (p.isPop) {
+          ctx.arc(p.x, p.y, BUBBLE_RADIUS * (p.scale || 1.0), 0, Math.PI * 2);
+          ctx.strokeStyle = p.color;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        } else {
+          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
 
       // Draw Popups

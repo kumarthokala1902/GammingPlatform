@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Play, RotateCcw, ChevronRight, Pause, X, ArrowLeft, Apple, Info } from 'lucide-react';
 import { db, collection, setDoc, doc, serverTimestamp, OperationType, handleFirestoreError } from '../firebase';
+import { soundService } from '../lib/soundService';
 
 const GRID_SIZE = 20;
 const INITIAL_SNAKE = [{ x: 10, y: 10 }, { x: 10, y: 11 }, { x: 10, y: 12 }];
@@ -80,6 +81,7 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
     popupId: 0,
     particles: [] as Particle[],
     startTime: 0,
+    headFlash: 0,
   });
 
   useEffect(() => {
@@ -101,6 +103,7 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
   }, []);
 
   const startGame = () => {
+    soundService.play('click');
     gameState.current = {
       snake: [...INITIAL_SNAKE],
       direction: { ...INITIAL_DIRECTION },
@@ -117,6 +120,7 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
       popupId: 0,
       particles: [],
       startTime: performance.now(),
+      headFlash: 0,
     };
     setScore(0);
     spawnFood();
@@ -129,6 +133,7 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
   };
 
   const gameOver = useCallback(async () => {
+    soundService.play('gameover');
     setStatus('GAMEOVER');
     const currentScore = gameState.current.score;
     const playtime = Math.floor((performance.now() - gameState.current.startTime) / 1000);
@@ -159,6 +164,7 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
   }, [highScore, user, onGameEnd]);
 
   const togglePause = useCallback(() => {
+    soundService.play('click');
     if (status === 'PLAYING') setStatus('PAUSED');
     else if (status === 'PAUSED') {
       gameState.current.lastMoveTime = performance.now();
@@ -255,12 +261,14 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
 
         // Wall Collision
         if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
+          gameState.current.shake = 30;
           gameOver();
           return;
         }
 
         // Self Collision
         if (gameState.current.snake.some(segment => segment.x === head.x && segment.y === head.y)) {
+          gameState.current.shake = 30;
           gameOver();
           return;
         }
@@ -269,6 +277,7 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
 
         // Food Collision
         if (head.x === gameState.current.food.x && head.y === gameState.current.food.y) {
+          soundService.play('score');
           const now = performance.now();
           const timeSinceLastEat = now - gameState.current.lastEatTime;
           
@@ -279,6 +288,7 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
           }
           
           gameState.current.lastEatTime = now;
+          gameState.current.headFlash = 1.0;
           const comboBonus = Math.min(50, (gameState.current.combo - 1) * 5);
           gameState.current.score += 10 + comboBonus;
           setScore(gameState.current.score);
@@ -296,14 +306,14 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
           }
 
           // Particles
-          for (let i = 0; i < 8; i++) {
+          for (let i = 0; i < 20; i++) {
             gameState.current.particles.push({
               x: head.x * (canvas.width / GRID_SIZE) + (canvas.width / GRID_SIZE) / 2,
               y: head.y * (canvas.width / GRID_SIZE) + (canvas.width / GRID_SIZE) / 2,
-              vx: (Math.random() - 0.5) * 6,
-              vy: (Math.random() - 0.5) * 6,
+              vx: (Math.random() - 0.5) * 12,
+              vy: (Math.random() - 0.5) * 12,
               life: 1.0,
-              color: '#ff4444',
+              color: '#4ade80',
             });
           }
 
@@ -336,6 +346,10 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
       if (gameState.current.shake > 0) {
         gameState.current.shake *= 0.9;
         if (gameState.current.shake < 0.1) gameState.current.shake = 0;
+      }
+
+      if (gameState.current.headFlash > 0) {
+        gameState.current.headFlash -= 0.1 * dt;
       }
 
       animationId = requestAnimationFrame(update);
@@ -381,6 +395,12 @@ export default function Snake({ onBack, user, onGameEnd }: SnakeProps) {
         ctx.shadowBlur = isHead ? 20 : 0;
         ctx.shadowColor = '#4ade80';
         
+        if (isHead && gameState.current.headFlash > 0) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${gameState.current.headFlash})`;
+          ctx.shadowBlur = 30;
+          ctx.shadowColor = 'white';
+        }
+
         const r = isHead ? 6 : 4;
         const x = segment.x * cellSize + 2;
         const y = segment.y * cellSize + 2;

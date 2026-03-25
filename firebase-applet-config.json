@@ -1,11 +1,10 @@
 {
-  "projectId": "claude-ls",
-  "appId": "1:92036333154:web:ee677c3922ebee36b61b3b",
-  "apiKey": "AIzaSyB8vxtMDwh5_BX_wQvkHW_hKcU5lGTRYlI",
-  "authDomain": "claude-ls.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
-  "storageBucket": "claude-ls.firebasestorage.app",
-  "messagingSenderId": "92036333154",
-  "measurementId": "G-FXHSYGEXH1",
-  "databaseURL": "https://claude-ls-default-rtdb.firebaseio.com"
+  "projectId": "gen-lang-client-0895786737",
+  "appId": "1:509852517495:web:5c5e3520e878464a6d7272",
+  "apiKey": "AIzaSyAmHa4uqGlMrM9aWwMeuE5gC53RHWN_L-w",
+  "authDomain": "gen-lang-client-0895786737.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-ebcad2ab-1caa-47d2-a1b7-6c4785eda10c",
+  "storageBucket": "gen-lang-client-0895786737.firebasestorage.app",
+  "messagingSenderId": "509852517495",
+  "measurementId": ""
 }
